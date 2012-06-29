@@ -1,0 +1,160 @@
+<#@ template language="C#" hostspecific="True" #>
+<# PackageProperties Package = ((PackageBuilder) Host).Properties; #>
+#
+# spec file for package <#= Package.ShortName #>
+#
+
+%define _binary_payload w9.bzdio
+%define ver <#= Package.Version #> 
+%define aspPrefix /usr/share/mono/asp.net 
+%define appsPrefix %{aspPrefix}/apps 
+%define appsDataPrefix %{aspPrefix}/data 
+%define appDataLocation %{appsDataPrefix}/%{name}-%{ver} 
+%define appLocation %{appsPrefix}/%{name}-%{ver} 
+%define appApacheConfLocation %{aspPrefix}/conf/%{name}-%{ver} 
+%define appVirtualPath /<#= Package.AspNetVirtualPath #>
+%define appInstanceName <#= Package.ShortName #> 
+%define xspConfigsLocation /etc/xsp/2.0 
+%define xspAvailableApps %{xspConfigsLocation}/applications-available   
+%define xspEnabledApps %{xspConfigsLocation}/applications-enabled   
+
+Name:           <#= Package.ShortName #>
+Summary:        <#= Package.Summary #>
+Version:        <#= Package.Version #>
+Release:        <#= Package.Release #>
+License:        <#= Package.License #>
+Group:          <#= Package.Group #>
+<#if (!String.IsNullOrEmpty (Package.Url)) { #>
+URL:            <#= Package.Url #>
+<# } #>
+BuildArch:      noarch
+BuildRoot:      %{_tmppath}/%{name}-%{version}-build
+AutoReqProv:	no
+
+# requires
+Requires:       <#= Package.TargetPlatform == "monoxrpm" ? "mono-addon-core" : "mono-core" #>
+Requires:       <#= Package.TargetPlatform == "monoxrpm" ? "mono-addon-web" : "mono-web" #>
+Requires:       <#= Package.TargetPlatform == "monoxrpm" ? "mono-addon-libgdiplus0" : "libgdiplus" #>
+<#if (!string.IsNullOrEmpty (Package.MinimumMonoVersion) && Package.MinimumMonoVersion != "Any") { #>
+Requires:       <#= Package.TargetPlatform == "monoxrpm" ? "apache2-mod_mono-addon" : "mod_mono" #> >= <#= Package.MinimumMonoVersion #>
+<# } else { #>
+Requires:       <#= Package.TargetPlatform == "monoxrpm" ? "apache2-mod_mono-addon" : "mod_mono" #>
+<# } #>	
+<# foreach (string req in Package.Dependencies) { #>
+Requires:	<#= req #><# } #>
+<# foreach (string req in Package.Provides) { #>
+Provides:	<#= req #><# } #>
+
+%description
+<#= Package.WordWrap (Package.Description, 80) #>
+
+%prep
+
+%build
+
+%install
+mkdir -p -m 755 ${RPM_BUILD_ROOT}%{appLocation} 
+mkdir -p -m 755 $RPM_BUILD_ROOT%{appApacheConfLocation} 
+mkdir -p -m 755 $RPM_BUILD_ROOT%{xspAvailableApps}   
+mkdir -p -m 755 $RPM_BUILD_ROOT%{xspEnabledApps}   
+mkdir -p -m 755 $RPM_BUILD_ROOT%{appDataLocation}
+
+<# foreach (string folder in Package.Folders) { #>mkdir -p "$RPM_BUILD_ROOT%{appLocation}/<#= folder #>"
+<# } #>
+
+<# foreach (string file in Package.Files) { #>install -m 644 "<#= ((PackageBuilder) Host).Root #>/<#= file #>" "$RPM_BUILD_ROOT%{appLocation}/<#= Path.GetDirectoryName (file) #>"
+<# } #>	
+
+## Create the .webapp config file 
+cat <<EOF > $RPM_BUILD_ROOT%{xspAvailableApps}/%{name}.webapp 
+<?xml version="1.0" ?> 
+<web-application> 
+  <name>%{appInstanceName}</name> 
+  <vpath>%{appVirtualPath}</vpath> 
+  <path>%{appLocation}</path> 
+  <enabled>true</enabled> 
+</web-application> 
+EOF
+
+## Create the .conf file for apache and mod_mono 
+cat <<EOF > $RPM_BUILD_ROOT/%{appApacheConfLocation}/%{name}.conf 
+Alias %{appVirtualPath} %{appLocation} 
+MonoApplicationsConfigFile %{name} %{xspAvailableApps}/%{name}.webapp 
+MonoServerPath %{name} "<#= Package.TargetPlatform == "monoxrpm" ? "/opt/novell/mono/bin/mod-mono-server2" : "/usr/bin/mod-mono-server2" #>"
+<#if (Package.UseMonoIomap) { #>
+MonoIOMAP ${name} all
+<# } #>	
+<Location %{appVirtualPath}> 
+         Allow from all 
+         Order allow,deny 
+         SetHandler mono 
+         MonoSetServerAlias %{name} 
+</Location> 
+EOF
+
+## Create a symlink in the apache conf directory
+# For SLES/OpenSUSE
+mkdir -p -m 755 %{buildroot}%{_sysconfdir}/apache2/conf.d
+ln -s %{appApacheConfLocation}/%{name}.conf %{buildroot}%{_sysconfdir}/apache2/conf.d/%{name}.conf
+# For RHEL
+mkdir -p -m 755 %{buildroot}%{_sysconfdir}/httpd/conf.d
+ln -s %{appApacheConfLocation}/%{name}.conf %{buildroot}%{_sysconfdir}/httpd/conf.d/%{name}.conf
+
+## Create the application info file (modify the init variables as   
+## required by your application 
+cat <<EOF > $RPM_BUILD_ROOT%{appDataLocation}/info 
+Name="%{name}" 
+Version="%{ver}" 
+InstanceName="%{appInstanceName}" 
+WebappFile="%{xspAvailableApps}/%{name}.webapp" 
+NeedsInit="true" 
+Initialized="false" 
+EOF
+
+%post
+FILE_LIST=$(cat <<EOF
+<# foreach (string folder in Package.WritableFolders) { #>
+%{appLocation}/<#= folder #>
+<# } #>	
+<# foreach (string file in Package.WritableFiles) { #>
+%{appLocation}/<#= file #>
+<# } #>
+EOF)
+
+# We only need to chown things if we're on Redhat
+if test -f /etc/redhat-release ; then
+   echo "Fixing RH file permissions:" 1>&2
+   echo "$FILE_LIST" | while read FILE; do
+      [ -f "$FILE" ] || [ -d "$FILE" ] && chown -v apache.root "$FILE" 1>&2
+   done
+fi
+
+
+## install -m 644 $RPM_BUILD_ROOT%{appApacheConfLocation}/%{name}.conf $RPM_BUILD_ROOT%{appApacheConfLocation}/%{name}.conf
+
+%clean
+rm -rf "$RPM_BUILD_ROOT"
+
+%files
+%defattr(-,root,root)
+%{appApacheConfLocation} 
+%{xspConfigsLocation}  
+%{appDataLocation}
+%{_sysconfdir}/apache2/conf.d/%{name}.conf
+%dir %{_sysconfdir}/httpd
+%dir %{_sysconfdir}/httpd/conf.d
+%{_sysconfdir}/httpd/conf.d/%{name}.conf
+
+# ensure that data folders are writable by website 
+<# foreach (string folder in Package.WritableFolders) { #>
+%dir %attr(-,wwwrun,root) "%{appLocation}/<#= folder #>"
+<# } #>	
+<# foreach (string folder in Package.NonWritableFolders) { #>
+%dir "%{appLocation}/<#= folder #>"
+<# } #>	
+<# foreach (string file in Package.WritableFiles) { #>
+%attr(-,wwwrun,root) "%{appLocation}/<#= file #>"
+<# } #>	
+<# foreach (string file in Package.NonWritableFiles) { #>
+"%{appLocation}/<#= file #>"
+<# } #>	

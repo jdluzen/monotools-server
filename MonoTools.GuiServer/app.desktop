@@ -1,0 +1,9 @@
+
+[Desktop Entry]
+Encoding=UTF-8
+Type=Application
+Name=MonoTools GUI Server
+Exec=monotools-gui-server
+Terminal=false
+Icon=monotools
+Categories=Profiling;Development;

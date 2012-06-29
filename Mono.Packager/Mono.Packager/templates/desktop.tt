@@ -1,0 +1,14 @@
+<#@ template language="C#" hostspecific="True" #>
+<# PackageProperties Package = ((PackageBuilder) Host).Properties; #>
+[Desktop Entry]
+Type=Application
+Version=<#= Package.Version #>
+Name=<#= Package.Name #>
+GenericName=<#= Package.Summary #>
+Comment=<#= Package.Summary #>
+Icon=/usr/share/pixmaps/<#= Path.GetFileName (Package.DesktopIcon) #>
+TryExec=/usr/bin/<#= Package.ShortName #>
+Exec=<#= Package.ShortName #>
+Terminal=false
+Categories=<#= Package.Categories #>
+X-SuSE-translate=false

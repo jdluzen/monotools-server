@@ -1,0 +1,9 @@
+<#@ template language="C#" hostspecific="True" #>
+<# PackageProperties Package = ((PackageBuilder) Host).Properties; #>#!/bin/sh
+<#if (Package.UseMonoIomap) { #>
+export MONO_IOMAP=all
+<# } #>	
+<#if (Package.TargetPlatform == "monoxrpm") { #>
+source /opt/novell/mono/bin/mono-addon-environment.sh
+<# } #>	
+exec mono /usr/lib/<#= Package.ShortName #>/<#= Package.StartUpExe #> "$@"

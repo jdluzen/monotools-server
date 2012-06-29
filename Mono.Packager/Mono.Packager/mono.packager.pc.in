@@ -1,0 +1,6 @@
+Name: Mono.Packager
+Description: Mono.Packager
+Version: 2.0
+
+Requires: 
+Libs: -r:@expanded_libdir@/@PACKAGE@/Mono.Packager.dll

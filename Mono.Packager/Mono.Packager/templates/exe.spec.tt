@@ -1,0 +1,61 @@
+<#@ template language="C#" hostspecific="True" #>
+<# PackageProperties Package = ((PackageBuilder) Host).Properties; #>
+#
+# spec file for package <#= Package.ShortName #>
+#
+
+%define _binary_payload w9.bzdio
+
+Name:           <#= Package.ShortName #>
+Summary:        <#= Package.Summary #>
+Version:        <#= Package.Version #>
+Release:        <#= Package.Release #>
+License:        <#= Package.License #>
+Group:          <#= Package.Group #>
+<#if (!String.IsNullOrEmpty (Package.Url)) { #>
+URL:            <#= Package.Url #>
+<# } #>
+BuildArch:      noarch
+BuildRoot:      %{_tmppath}/%{name}-%{version}-build
+AutoReqProv:	no
+
+# requires
+<#if (!string.IsNullOrEmpty (Package.MinimumMonoVersion) && Package.MinimumMonoVersion != "Any") { #>
+Requires:       <#= Package.TargetPlatform == "monoxrpm" ? "mono-addon-core" : "mono-core" #> >= <#= Package.MinimumMonoVersion #>
+<# } else { #>
+Requires:       <#= Package.TargetPlatform == "monoxrpm" ? "mono-addon-core" : "mono-core" #>
+<# } #>	
+<# foreach (string req in Package.Dependencies) { #>
+Requires:	<#= req #><# } #>
+<# foreach (string req in Package.Provides) { #>
+Provides:	<#= req #><# } #>
+
+%description
+<#= Package.WordWrap (Package.Description, 80) #>
+
+%prep
+
+%build
+
+%install
+mkdir -p "$RPM_BUILD_ROOT/usr/bin"
+install -m 755 "../<#= Package.ShortName #>" "$RPM_BUILD_ROOT/usr/bin/<#= Package.ShortName #>"
+
+# Create the application root folder
+mkdir -p "$RPM_BUILD_ROOT/usr/lib/<#= Package.ShortName #>"
+
+<# foreach (string folder in Package.Folders) { #>
+mkdir -p "$RPM_BUILD_ROOT/usr/lib/<#= Package.ShortName #>/<#= folder #>"
+<# } #>			
+
+<# foreach (string file in Package.Files) { #>
+install -m 644 "<#= ((PackageBuilder) Host).Root #>/<#= file #>" "$RPM_BUILD_ROOT/usr/lib/<#= Package.ShortName #>/<#= Path.GetDirectoryName (file) #>"
+<# } #>		
+
+%clean
+rm -rf "$RPM_BUILD_ROOT"
+
+%files
+%defattr(-,root,root)
+/usr/bin
+/usr/lib/<#= Package.ShortName #>

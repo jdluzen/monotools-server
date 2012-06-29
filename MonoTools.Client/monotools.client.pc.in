@@ -1,0 +1,6 @@
+Name: MonoTools.Client
+Description: MonoTools.Client
+Version: 2.0
+
+Requires: 
+Libs: -r:@expanded_libdir@/@PACKAGE@/MonoTools.Client.dll
